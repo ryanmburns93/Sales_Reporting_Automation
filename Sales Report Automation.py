@@ -416,8 +416,7 @@ def establish_gmail_api_connection():
 
 def preprocess_item_details_square_file(square_download_filename,
                                         first_transaction_num,
-                                        vendor_info_df,
-                                        new_sheetname):
+                                        vendor_info_df):
     """
     Clean and format Square item details transaction report.
 
@@ -502,6 +501,25 @@ def preprocess_item_details_square_file(square_download_filename,
                                                  'TIME']]
     item_transactions_df['DATE'] = [datetime.strptime(date_val, "%Y-%m-%d") for date_val in item_transactions_df['DATE']]
     item_transactions_df['TIME'] = [datetime.strptime(time_val, "%H:%M:%S") for time_val in item_transactions_df['TIME']]
+    return item_transactions_df
+
+
+def write_to_workbook(item_transactions_df, new_sheetname):
+    """
+    Add reporting period transactions in new sheet in the sales Excel workbook.
+
+    Parameters
+    ----------
+    item_transactions_df : Pandas DataFrame
+        DataFrame containing the data of interest parsed from the original Square report.
+    new_sheetname : str
+        The name to assign to the new sheet added to the sales Excel workbook.
+
+    Returns
+    -------
+    None.
+
+    """
     wb = load_workbook(filename = f'The Beverly Collective Sales {datetime.now().year}.xlsx')
     ws = wb.create_sheet(new_sheetname, -1) # adds sheet as second-to-last sheet in workbook (last is vendor info)
     for r in dataframe_to_rows(item_transactions_df, index=False, header=True):
@@ -523,7 +541,7 @@ def preprocess_item_details_square_file(square_download_filename,
     for col in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']:
         ws[f'{col}1'].font = Font(bold=True)
     wb.save(f"C:/Users/Ryan/BevCol/The Beverly Collective Sales {datetime.now().year}.xlsx")
-    return item_transactions_df
+    return
 
 
 def main():
@@ -538,8 +556,8 @@ def main():
      square_download_filename) = gather_input_info()
     item_transactions_df = preprocess_item_details_square_file(square_download_filename=square_download_filename,
                                                                first_transaction_num=(max(last_full_report['TRANSACTION'])+1),
-                                                               vendor_info_df=vendor_info_df,
-                                                               new_sheetname=new_sheetname)
+                                                               vendor_info_df=vendor_info_df)
+    write_to_workbook(item_transactions_df, new_sheetname)
     _ = input(f'Press enter after reviewing The Beverly Collective Sales {datetime.now().year} file and cleaning missing values.')
     current_full_report = pd.read_excel(f'C:/Users/Ryan/BevCol/The Beverly Collective Sales {datetime.now().year}.xlsx',
                                         new_sheetname)
