@@ -24,6 +24,12 @@ import numpy as np
 from datetime import datetime
 
 
+# This call structure is necessary to install the google libraries, and is provided
+# below given the distant connection between the library name called for installation vs import:
+#
+# pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib
+
+
 def gather_input_info():
     '''
     Gather information from the user for customizing the program outputs.
@@ -33,24 +39,20 @@ def gather_input_info():
     image_date : String.
         String of the date for the end of the period. Used to label each image
         produced. Ex. 'NOV 15' for the November 1 - November 15 reporting period.
-    new_sheetname : String.
-        Name to be assigned to the worksheet in the Excel workbook for the reporting period currently
-        being processed. Ex: 'NOV 1 to 15' for the November 1 - November 15 reporting period.
+    sheetname : String.
+        Name of the worksheet in the Excel workbook for the reporting period.
+        Ex. 'NOV 1 to 15' for the November 1 - November 15 reporting period.
     period_start_date : String.
         The starting date of the reporting period for customizing the outgoing
         email. Ex. 'November 1st' for the November 1 - November 15 reporting period.
     period_end_date : String.
         The ending date of the reporting period for customizing the outgoing
         email. Ex. 'November 15th' for the November 1 - November 15 reporting period.
-    last_full_report : DataFrame.
-        The prior reporting period transactions report in DataFrame format.
+    current_full_report : DataFrame.
+        The current reporting period transactions report in DataFrame format.
     vendor_info_df : DataFrame.
         The vendor information table with vendor ID, contact information, and
         payment details in DataFrame format.
-    all_vendors_list : list
-        A list of the codes for active vendors.
-    square_download_filename : str
-        The name of the .csv file from Square containing the reporting period's transactions.
 
     '''
     square_download_filename = input('Please paste the name of the downloaded square file with item transaction details: ')
@@ -73,19 +75,13 @@ def gather_input_info():
     except IndexError:
         pass
     all_vendors_list = [code for code in vendor_info_df['VENDOR CODE'] if code is not np.nan]
-    return (image_date,
-            new_sheetname,
-            period_start_date,
-            period_end_date,
-            last_full_report,
-            vendor_info_df,
-            all_vendors_list,
-            square_download_filename)
+    return (image_date, new_sheetname, period_start_date,
+            period_end_date, last_full_report, vendor_info_df, all_vendors_list, square_download_filename)
 
 
 def create_image_attachments(current_full_report, image_date):
     '''
-    Create a screenshot of the transactions of each vendor who made sale
+    Creates an image screenshoting the transactions of each vendor who made sale
     transactions during the current reporting period and saves the image to the local
     directory.
 
@@ -145,20 +141,20 @@ def create_message(sender, to, subject, message_text):
     Code from: https://developers.google.com/gmail/api/guides/drafts#python
 
     Parameters
-    ----------
+    -------
     sender : str
-        Email address of the email sender.
+        Email address of the sender.
     to : str
-        Email address of the email recipient.
+        Email address of the receiver.
     subject : str
-        The text subject line of the email.
+        The subject of the email message.
     message_text : str
-        The text body of the email message.
+        The text of the email message.
 
     Returns
     -------
-    dict
-        Dictionary containing the raw base64url encoded email object.
+    return_dict : dict
+        A dictionary object containing a base64url encoded email object.
 
     """
     message = MIMEMultipart(message_text)
@@ -166,9 +162,10 @@ def create_message(sender, to, subject, message_text):
     message['to'] = to
     message['from'] = sender
     message['subject'] = subject
-    return {'raw': base64.urlsafe_b64encode(message.as_string().
+    return_dict =  {'raw': base64.urlsafe_b64encode(message.as_string().
                                             encode('UTF-8')).
-            decode('ascii')}
+                    decode('ascii')}
+    return return_dict
 
 
 def create_draft(service, user_id, subject, message_body, to):
@@ -178,22 +175,21 @@ def create_draft(service, user_id, subject, message_body, to):
     https://developers.google.com/gmail/api/guides/drafts
 
     Parameters
-    ----------
-    service : object
+    -------
+    service : API instance
         Authorized Gmail API service instance.
     user_id : str
         User's email address. The special value "me" can be used to indicate the authenticated user.
-    subject : str
-        The text subject line of the email.
-    message_body : str
+    message_body : MIME object
         The body of the email message, including headers.
     to : str
-        Email address of the email recipient.
+        Message recipient's email address
 
     Returns
     -------
-    draft : object
-        Draft object, including draft id and message meta data.
+    draft : MIME object
+        Draft MIME object, including draft id and message meta data.
+
     """
     message = MIMEText(message_body)
     message['to'] = to
@@ -209,29 +205,29 @@ def create_draft(service, user_id, subject, message_body, to):
 
 
 
-def create_email_text(vendor_firstname, date_start, date_end, amount, payment_method):
+def create_email_text(vendor_firstname, date_start, date_end, amount, payment_method, email):
     """
-    Create the text for the email going to vendors who made sales in the current reporting period.
+    Create full text of an email tailored to the details of the vendor and reporting period.
 
     Parameters
-    ----------
+    -------
     vendor_firstname : str
         First name of the vendor receiving the email.
     date_start : str
-        Written date of the start of the reporting period.
+        String representation of the first date of the reporting period.
     date_end : str
-        Written date of the end of the reporting period.
-    email : str
-        Email address of the vendor receiving the email.
-    amount : str
-        String representation of the amount earned by the vendor during the reporting period.
+        String representation of the last date of the reporting period.
+    amount : float
+        Amount earned by the vendor for the reporting period.
     payment_method : str
-        String representing the vendor's preferred method of payment.
+        The preferred payment method of the vendor.
+    email : str
+        Message recipient's email address.
 
     Returns
     -------
     text : str
-        Full text of the email to be sent to a vendor who made sales during the reporting period.
+        Full text of email populated with vendor and payment variables for a tailored message.
 
     """
     text = f'''Hi {vendor_firstname},\n
@@ -244,23 +240,26 @@ Monica
     return text
 
 
-def create_zero_sales_email_text(vendor_firstname, date_start, date_end):
+def create_zero_sales_email_text(vendor_firstname, date_start, date_end, email):
     """
-    Create the text for the email going to vendors without sales in the current reporting period.
+    Create full text of an email tailored to the details of the vendor and reporting period
+    when the vendor made no sales for the reporting period.
 
     Parameters
-    ----------
+    -------
     vendor_firstname : str
         First name of the vendor receiving the email.
     date_start : str
-        Written date of the start of the reporting period.
+        String representation of the first date of the reporting period.
     date_end : str
-        Written date of the end of the reporting period.
+        String representation of the last date of the reporting period.
+    email : str
+        Message recipient's email address.
 
     Returns
     -------
     text : str
-        Full text of the email to be sent to a vendor who did not make sales during the reporting period.
+        Full text of email populated with vendor and payment variables for a tailored message.
 
     """
     text = f'''Hi {vendor_firstname}!\n
@@ -273,7 +272,7 @@ Monica'''
 
 def calculate_summary_amount(current_full_report):
     '''
-    Creates an aggregate sales transactions report providing top-level sales
+    Create an aggregate sales transactions report providing top-level sales
     information for each vendor.
 
     Parameters
@@ -302,25 +301,27 @@ def create_vendor_email_drafts(service, current_full_report, grouped_df, vendor_
 
     Parameters
     ----------
-    service : Gmail API Connection.
+    service : Gmail API Connection
         An active connection with live certification and token to the Gmail API.
-    current_full_report : DataFrame.
+    current_full_report : Pandas DataFrame
         DataFrame containing the current reporting period transactions report.
-    grouped_df : DataFrame.
+    grouped_df : Pandas DataFrame
         DataFrame containing a summary output of the aggregate net sales, sales tax,
         vendor earnings, and The Beverly Collective commission for each vendor.
-    vendor_info_df : DataFrame.
+    vendor_info_df : Pandas DataFrame
         The vendor information table with vendor ID, contact information, and
         payment details in DataFrame format.
-    period_start_date : String.
+    period_start_date : str
         The starting date of the reporting period for customizing the outgoing
         email. Ex. 'November 1st' for the November 1 - November 15 reporting period.
-    period_end_date : String.
+    period_end_date : str
         The ending date of the reporting period for customizing the outgoing
         email. Ex. 'November 15th' for the November 1 - November 15 reporting period.
-    image_date : String.
+    image_date : str
         String of the date for the end of the period. Used to label each image
         produced. Ex. 'NOV 15' for the November 1 - November 15 reporting period.
+    all_vendors_list : list
+        List of all current vendors for whom communication is needed.
 
     Returns
     -------
@@ -353,7 +354,8 @@ def create_vendor_email_drafts(service, current_full_report, grouped_df, vendor_
                          subject=f'{vendor} Update {image_date} The Beverly Collective',
                          message_body=create_zero_sales_email_text(vendor_firstname,
                                                                    period_start_date,
-                                                                   period_end_date),
+                                                                   period_end_date,
+                                                                   vendor_email),
                          to=vendor_email)
     return
 
@@ -416,28 +418,33 @@ def establish_gmail_api_connection():
 
 def preprocess_item_details_square_file(square_download_filename,
                                         first_transaction_num,
-                                        vendor_info_df):
-    """
-    Clean and format Square item details transaction report.
+                                        vendor_info_df,
+                                        new_sheetname):
+    '''
+    Clean and format item details transaction report produced by Square for the
+    reporting period.
 
     Parameters
     ----------
     square_download_filename : str
-        Name of the .csv file downloaded from Square.
+        The file name of the item details transaction report downloaded from Square.
     first_transaction_num : int
-        The unique transaction number for the first transaction of the period.
+        The unique transaction number of the first transaction of the period based on the last
+        transaction number from the last reporting period.
     vendor_info_df : Pandas DataFrame
         The vendor information table with vendor ID, contact information, and
         payment details in DataFrame format.
     new_sheetname : str
-        The name to assign to the new sheet added to the sales Excel workbook.
+        The name of the new sheet to create in the sales Excel workbook containing the
+        latest reporting period transactions.
 
     Returns
     -------
     item_transactions_df : Pandas DataFrame
-        DataFrame containing the data of interest parsed from the original Square report.
+        A clean DataFrame with the information from the current reporting period as was inserted
+        into the sales Excel workbook.
 
-    """
+    '''
     item_transactions_df = pd.read_csv(os.path.join('C:/Users/Ryan/Downloads/', square_download_filename))
     item_transactions_df = item_transactions_df[['Category',
                                                  'Item',
@@ -501,25 +508,6 @@ def preprocess_item_details_square_file(square_download_filename,
                                                  'TIME']]
     item_transactions_df['DATE'] = [datetime.strptime(date_val, "%Y-%m-%d") for date_val in item_transactions_df['DATE']]
     item_transactions_df['TIME'] = [datetime.strptime(time_val, "%H:%M:%S") for time_val in item_transactions_df['TIME']]
-    return item_transactions_df
-
-
-def write_to_workbook(item_transactions_df, new_sheetname):
-    """
-    Add reporting period transactions in new sheet in the sales Excel workbook.
-
-    Parameters
-    ----------
-    item_transactions_df : Pandas DataFrame
-        DataFrame containing the data of interest parsed from the original Square report.
-    new_sheetname : str
-        The name to assign to the new sheet added to the sales Excel workbook.
-
-    Returns
-    -------
-    None.
-
-    """
     wb = load_workbook(filename = f'The Beverly Collective Sales {datetime.now().year}.xlsx')
     ws = wb.create_sheet(new_sheetname, -1) # adds sheet as second-to-last sheet in workbook (last is vendor info)
     for r in dataframe_to_rows(item_transactions_df, index=False, header=True):
@@ -541,7 +529,7 @@ def write_to_workbook(item_transactions_df, new_sheetname):
     for col in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']:
         ws[f'{col}1'].font = Font(bold=True)
     wb.save(f"C:/Users/Ryan/BevCol/The Beverly Collective Sales {datetime.now().year}.xlsx")
-    return
+    return item_transactions_df
 
 
 def main():
@@ -556,8 +544,8 @@ def main():
      square_download_filename) = gather_input_info()
     item_transactions_df = preprocess_item_details_square_file(square_download_filename=square_download_filename,
                                                                first_transaction_num=(max(last_full_report['TRANSACTION'])+1),
-                                                               vendor_info_df=vendor_info_df)
-    write_to_workbook(item_transactions_df, new_sheetname)
+                                                               vendor_info_df=vendor_info_df,
+                                                               new_sheetname=new_sheetname)
     _ = input(f'Press enter after reviewing The Beverly Collective Sales {datetime.now().year} file and cleaning missing values.')
     current_full_report = pd.read_excel(f'C:/Users/Ryan/BevCol/The Beverly Collective Sales {datetime.now().year}.xlsx',
                                         new_sheetname)
