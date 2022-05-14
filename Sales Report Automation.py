@@ -416,6 +416,48 @@ def establish_gmail_api_connection():
     return service
 
 
+def insert_transactions_sheet_in_workbook(item_transactions_df, new_sheetname):
+    '''
+    Insert the cleaned item transactions DataFrame into the sales Excel workbook and save.
+
+    Parameters
+    ----------
+    item_transactions_df : Pandas DataFrame
+        A clean DataFrame with the information from the current reporting period as was inserted
+        into the sales Excel workbook.
+    new_sheetname : str
+        The name of the new sheet to create in the sales Excel workbook containing the
+        latest reporting period transactions.
+
+    Returns
+    -------
+    None.
+
+    '''
+    wb = load_workbook(filename = f'The Beverly Collective Sales {datetime.now().year}.xlsx')
+    ws = wb.create_sheet(new_sheetname, -1) # adds sheet as second-to-last sheet in workbook (last is vendor info)
+    for r in dataframe_to_rows(item_transactions_df, index=False, header=True):
+        ws.append(r)
+    for row in range(1, len(item_transactions_df)+2):
+        ws[f'I{row}'].number_format='mm-dd-yy'
+        ws[f'J{row}'].number_format='h:mm:ss'
+        ws[f'E{row}'].number_format='"$"#,##0.00'
+        ws[f'F{row}'].number_format='"$"#,##0.00'
+        ws[f'G{row}'].number_format='"$"#,##0.00'
+        ws[f'H{row}'].number_format='"$"#,##0.00'
+        if ws[f'B{row}'].value=='NONE':
+            ws[f'B{row}'].fill = PatternFill(start_color='FFFF0000', end_color='FFFF0000', fill_type='solid')
+        for col in ['G', 'H']:
+            if ws[f'{col}{row}'].value=='Error':
+                ws[f'{col}{row}'].fill = PatternFill(start_color='FFFF0000', end_color='FFFF0000', fill_type='solid')
+        if ws[f'D{row}'].value=='':
+            ws[f'D{row}'].fill = PatternFill(start_color='FFFF0000', end_color='FFFF0000', fill_type='solid')
+    for col in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']:
+        ws[f'{col}1'].font = Font(bold=True)
+    wb.save(f"C:/Users/Ryan/BevCol/The Beverly Collective Sales {datetime.now().year}.xlsx")
+    return
+
+
 def preprocess_item_details_square_file(square_download_filename,
                                         first_transaction_num,
                                         vendor_info_df,
@@ -508,27 +550,7 @@ def preprocess_item_details_square_file(square_download_filename,
                                                  'TIME']]
     item_transactions_df['DATE'] = [datetime.strptime(date_val, "%Y-%m-%d") for date_val in item_transactions_df['DATE']]
     item_transactions_df['TIME'] = [datetime.strptime(time_val, "%H:%M:%S") for time_val in item_transactions_df['TIME']]
-    wb = load_workbook(filename = f'The Beverly Collective Sales {datetime.now().year}.xlsx')
-    ws = wb.create_sheet(new_sheetname, -1) # adds sheet as second-to-last sheet in workbook (last is vendor info)
-    for r in dataframe_to_rows(item_transactions_df, index=False, header=True):
-        ws.append(r)
-    for row in range(1, len(item_transactions_df)+2):
-        ws[f'I{row}'].number_format='mm-dd-yy'
-        ws[f'J{row}'].number_format='h:mm:ss'
-        ws[f'E{row}'].number_format='"$"#,##0.00'
-        ws[f'F{row}'].number_format='"$"#,##0.00'
-        ws[f'G{row}'].number_format='"$"#,##0.00'
-        ws[f'H{row}'].number_format='"$"#,##0.00'
-        if ws[f'B{row}'].value=='NONE':
-            ws[f'B{row}'].fill = PatternFill(start_color='FFFF0000', end_color='FFFF0000', fill_type='solid')
-        for col in ['G', 'H']:
-            if ws[f'{col}{row}'].value=='Error':
-                ws[f'{col}{row}'].fill = PatternFill(start_color='FFFF0000', end_color='FFFF0000', fill_type='solid')
-        if ws[f'D{row}'].value=='':
-            ws[f'D{row}'].fill = PatternFill(start_color='FFFF0000', end_color='FFFF0000', fill_type='solid')
-    for col in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']:
-        ws[f'{col}1'].font = Font(bold=True)
-    wb.save(f"C:/Users/Ryan/BevCol/The Beverly Collective Sales {datetime.now().year}.xlsx")
+    insert_transactions_sheet_in_workbook(item_transactions_df, new_sheetname)
     return item_transactions_df
 
 
